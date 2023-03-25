@@ -29,11 +29,25 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+
+/* sleeping thread list */
+struct sleeping_thread {
+	struct list_elem elem;
+	struct thread *t;
+	int64_t ticks_left;
+};
+
+struct list sleeping_threads;
+
+
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
 void
 timer_init (void) {
+
+	list_init(&sleeping_threads);
+
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
 	   nearest. */
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
@@ -43,6 +57,7 @@ timer_init (void) {
 	outb (0x40, count >> 8);
 
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -91,10 +106,19 @@ timer_elapsed (int64_t then) {
 void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
+	struct thread *t = thread_current ();
+	struct sleeping_thread *current_thread;
+	printf("%d\n", t -> tid);
+	current_thread = malloc (sizeof *current_thread);
+	current_thread -> t = t;
+	current_thread -> ticks_left = ticks;
+	list_push_back (&sleeping_threads, &current_thread->elem);
+	thread_yield();
+	thread_block();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,6 +149,20 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
+	struct list_elem *e;
+	struct sleeping_thread *sleeping_thread;
+	struct list_elem *next;
+	for(e = list_begin (&sleeping_threads); e != list_end (&sleeping_threads); e=next){
+		sleeping_thread = list_entry(e, struct sleeping_thread, elem);
+		sleeping_thread -> ticks_left--;
+		next = list_next (e);
+		if (sleeping_thread -> ticks_left <= 0){
+			thread_unblock(sleeping_thread -> t);
+			list_remove (e);
+		}
+
+	}
+
 	thread_tick ();
 }
 
