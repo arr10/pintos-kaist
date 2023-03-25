@@ -108,15 +108,21 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 	struct thread *t = thread_current ();
 	struct sleeping_thread *current_thread;
-	printf("%d\n", t -> tid);
+	// printf("start sleep | %d\n", t -> tid);
 	current_thread = malloc (sizeof *current_thread);
 	current_thread -> t = t;
 	current_thread -> ticks_left = ticks;
 	list_push_back (&sleeping_threads, &current_thread->elem);
-	thread_yield();
+	
+	intr_disable();
 	thread_block();
+	intr_enable();
 
-	ASSERT (intr_get_level () == INTR_ON);
+	// printf("stop sleep | %d\n", t -> tid);
+
+	free(current_thread);
+
+	// ASSERT (intr_get_level () == INTR_ON);
 	// while (timer_elapsed (start) < ticks)
 	// 	thread_yield ();
 }
@@ -152,13 +158,16 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	struct list_elem *e;
 	struct sleeping_thread *sleeping_thread;
 	struct list_elem *next;
+
+
 	for(e = list_begin (&sleeping_threads); e != list_end (&sleeping_threads); e=next){
 		sleeping_thread = list_entry(e, struct sleeping_thread, elem);
 		sleeping_thread -> ticks_left--;
 		next = list_next (e);
 		if (sleeping_thread -> ticks_left <= 0){
-			thread_unblock(sleeping_thread -> t);
+			// printf("timer_interrupt | unblocking thread: %d\n", sleeping_thread -> t -> tid);
 			list_remove (e);
+			thread_unblock(sleeping_thread -> t);
 		}
 
 	}
