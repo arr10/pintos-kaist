@@ -7,3 +7,6 @@ TIMER TODO:
 - Block a thread in timer.c file, timer_sleep function
 - Add a following tuple: (PCB, time_left) to the list
 - In timer_interrupt in timer.c file, check the list and time_left--, and if time_left == 0, unblock the thread.
+- Surrounded thread_block() with intr_disable() and intr_enable() to avoid kernel panic
+- Freed allocated memory in the end of timer_sleep() function 
+
